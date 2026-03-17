@@ -8,31 +8,22 @@ function cleanList(arr) {
   return [...new Set(arr.map(v => v.trim()))].filter(Boolean);
 }
 
-function splitItems(lines) {
-  return cleanList(
-    lines.flatMap(line =>
-      line
-        .split(/,|\/|;|\|/)
-        .map(part => part.trim())
-        .filter(Boolean)
-    )
-  );
+function splitMergedText(text) {
+  return text
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(/(?<=[a-z\/])(?=[A-Z])/)
+    .map(s => s.trim())
+    .filter(Boolean);
 }
 
-function getSection(lines, startLabel, endLabel) {
-  const startIndex = lines.findIndex(
-    line => line.toLowerCase() === startLabel.toLowerCase()
+function getSectionText(fullText, startLabel, endLabel) {
+  const pattern = new RegExp(
+    `${startLabel}\\s*([\\s\\S]*?)\\s*${endLabel}`,
+    "i"
   );
-
-  if (startIndex === -1) return [];
-
-  const endIndex = lines.findIndex(
-    (line, i) => i > startIndex && line.toLowerCase() === endLabel.toLowerCase()
-  );
-
-  if (endIndex === -1) return [];
-
-  return lines.slice(startIndex + 1, endIndex);
+  const match = fullText.match(pattern);
+  return match ? match[1].trim() : "";
 }
 
 export async function GET(request) {
@@ -71,20 +62,26 @@ export async function GET(request) {
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    const rawText = $("body").text().replace(/\r/g, "");
-    const lines = rawText
-      .split("\n")
-      .map(line => line.replace(/\s+/g, " ").trim())
-      .filter(Boolean);
+    const rawText = $("body").text().replace(/\r/g, "").replace(/\u00a0/g, " ");
 
-    const auspiciousLines = getSection(lines, "Auspicious", "Auspicious Times");
-    const inauspiciousLines = getSection(lines, "Inauspicious", "Inauspicious Times");
+    const clashMatch = rawText.match(/Clash:\s*([A-Za-z]+)/i);
+    const clashAnimal = clashMatch ? clashMatch[1].trim() : "";
+    const isSnakeClash = /snake/i.test(clashAnimal);
 
-    const finalSuit = splitItems(auspiciousLines);
-    const finalAvoid = splitItems(inauspiciousLines);
+    const auspiciousText = getSectionText(
+      rawText,
+      "Auspicious",
+      "Auspicious Times"
+    );
 
-    const clashLine = lines.find(line => /^Clash:/i.test(line)) || "";
-    const isSnakeClash = /snake/i.test(clashLine);
+    const inauspiciousText = getSectionText(
+      rawText,
+      "Inauspicious",
+      "Inauspicious Times"
+    );
+
+    const finalSuit = cleanList(splitMergedText(auspiciousText));
+    const finalAvoid = cleanList(splitMergedText(inauspiciousText));
 
     if (finalSuit.length === 0 && finalAvoid.length === 0) {
       return NextResponse.json(
@@ -101,7 +98,7 @@ export async function GET(request) {
       status: isSnakeClash ? "Snake Clash" : "Auspicious",
       suit: finalSuit,
       avoid: finalAvoid,
-      clash: clashLine,
+      clash: clashAnimal ? `Clash: ${clashAnimal}` : "",
     });
   } catch (error) {
     console.error("calendar route error:", error);
