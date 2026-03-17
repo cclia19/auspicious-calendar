@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import * as cheerio from "cheerio";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+export const revalidate = 86400;
 
 function cleanList(arr) {
-  return [...new Set(arr.map(v => v.trim()))].filter(Boolean);
+  return [...new Set(arr.map((v) => v.trim()))].filter(Boolean);
 }
 
 function splitMergedText(text) {
@@ -13,7 +13,7 @@ function splitMergedText(text) {
     .replace(/\s+/g, " ")
     .trim()
     .split(/(?<=[a-z\/])(?=[A-Z])/)
-    .map(s => s.trim())
+    .map((s) => s.trim())
     .filter(Boolean);
 }
 
@@ -45,7 +45,7 @@ export async function GET(request) {
           "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
       },
-      cache: "no-store",
+      next: { revalidate: 86400 },
     });
 
     if (!response.ok) {
@@ -62,9 +62,12 @@ export async function GET(request) {
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    const rawText = $("body").text().replace(/\r/g, "").replace(/\u00a0/g, " ");
+    const rawText = $("body")
+      .text()
+      .replace(/\r/g, "")
+      .replace(/\u00a0/g, " ");
 
-    const clashMatch = rawText.match(/Clash:\s*([A-Za-z]+)/i);
+    const clashMatch = rawText.match(/Clash:\s*\[?([A-Za-z]+)\]?/i);
     const clashAnimal = clashMatch ? clashMatch[1].trim() : "";
     const isSnakeClash = /snake/i.test(clashAnimal);
 
@@ -105,8 +108,7 @@ export async function GET(request) {
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error ? error.message : "Unknown server error",
+        error: error instanceof Error ? error.message : "Unknown server error",
       },
       { status: 500 }
     );
