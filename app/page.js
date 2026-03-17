@@ -1,83 +1,159 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
 
 export default function CalendarApp() {
+  const now = new Date();
+
+  const [selectedDay, setSelectedDay] = useState(now.getDate());
   const [dayData, setDayData] = useState(null);
-  const [selectedDay, setSelectedDay] = useState(null);
-  const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setSelectedDay(new Date().getDate());
-  }, []);
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+
+  const displayDate = useMemo(() => {
+    return {
+      month: now.toLocaleString("en-US", { month: "long" }),
+      year,
+    };
+  }, [year]);
+
+  const daysInMonth = useMemo(() => {
+    return new Date(year, month, 0).getDate();
+  }, [year, month]);
 
   useEffect(() => {
-    if (!selectedDay) return;
-    
     let isMounted = true;
-    setLoading(true);
-    setError(false);
 
-    const now = new Date();
-    const m = now.getMonth() + 1;
-    const y = now.getFullYear();
+    async function loadData() {
+      setLoading(true);
+      setErrorMessage("");
 
-    fetch(`/api/calendar?day=${selectedDay}&month=${m}&year=${y}`)
-      .then(res => res.ok ? res.json() : Promise.reject())
-      .then(data => {
+      try {
+        const res = await fetch(
+          `/api/calendar?day=${selectedDay}&month=${month}&year=${year}`,
+          { cache: "no-store" }
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data?.error || "Failed to load calendar data");
+        }
+
         if (isMounted) {
           setDayData(data);
-          setLoading(false);
         }
-      })
-      .catch(() => {
+      } catch (err) {
         if (isMounted) {
-          setError(true);
+          setDayData(null);
+          setErrorMessage(err.message || "Failed to fetch data");
+        }
+      } finally {
+        if (isMounted) {
           setLoading(false);
         }
-      });
+      }
+    }
 
-    return () => { isMounted = false; };
-  }, [selectedDay]);
+    loadData();
 
-  if (!selectedDay) return null;
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDay, month, year]);
+
+  const goPrev = () => {
+    setSelectedDay((d) => (d > 1 ? d - 1 : daysInMonth));
+  };
+
+  const goNext = () => {
+    setSelectedDay((d) => (d < daysInMonth ? d + 1 : 1));
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center p-6 font-sans antialiased">
-      
-      {/* Navigation */}
-      <div className="w-full max-w-md flex items-center justify-between mb-8 bg-white p-3 rounded-3xl shadow-sm border border-slate-100">
-        <button onClick={() => setSelectedDay(d => d > 1 ? d - 1 : 31)} className="p-4 hover:bg-slate-50 rounded-2xl text-slate-400 font-bold">←</button>
+      <div className="w-full max-w-md flex items-center justify-between mb-8 bg-white p-2 rounded-3xl shadow-sm border border-slate-100">
+        <button
+          onClick={goPrev}
+          className="p-4 hover:bg-slate-50 rounded-2xl text-slate-400 font-bold"
+        >
+          ←
+        </button>
+
         <div className="text-center">
-          <span className="block text-[10px] font-black uppercase tracking-[0.4em] text-slate-300 mb-1">
-            {new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })}
+          <span className="block text-[9px] font-black uppercase tracking-[0.4em] text-slate-300">
+            {displayDate.month} {displayDate.year}
           </span>
-          <span className="text-2xl font-black text-slate-900 leading-none">{selectedDay}</span>
+          <span className="text-xl font-black text-slate-900">{selectedDay}</span>
         </div>
-        <button onClick={() => setSelectedDay(d => d < 31 ? d + 1 : 1)} className="p-4 hover:bg-slate-50 rounded-2xl text-slate-400 font-bold">→</button>
+
+        <button
+          onClick={goNext}
+          className="p-4 hover:bg-slate-50 rounded-2xl text-slate-400 font-bold"
+        >
+          →
+        </button>
       </div>
 
-      {/* Content */}
-      <div className={`max-w-md w-full bg-white rounded-[3.5rem] shadow-2xl overflow-hidden border border-white transition-all duration-500 ${loading ? 'opacity-30 scale-95' : 'opacity-100 scale-100'}`}>
-        {error ? (
-          <div className="p-24 text-center">
-            <h1 className="text-sm font-black text-rose-500 uppercase tracking-widest mb-4">Sync Failed</h1>
-            <button onClick={() => window.location.reload()} className="px-8 py-3 bg-slate-900 text-white text-[10px] font-black rounded-full uppercase tracking-widest shadow-lg">Retry Sync</button>
+      <div
+        className={`max-w-md w-full bg-white rounded-[3.5rem] shadow-2xl overflow-hidden border border-white transition-all duration-500 ${
+          loading ? "opacity-30 scale-95" : "opacity-100 scale-100"
+        }`}
+      >
+        {loading && (
+          <div className="p-20 text-center text-slate-400 text-sm font-bold">
+            Loading...
           </div>
-        ) : dayData && (
+        )}
+
+        {!loading && errorMessage && (
+          <div className="p-10 text-center">
+            <h1 className="text-sm font-black text-rose-500 uppercase tracking-widest mb-3">
+              Sync Failed
+            </h1>
+            <p className="text-xs text-slate-500 break-words">{errorMessage}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 px-6 py-2 bg-slate-900 text-white text-[10px] font-bold rounded-full uppercase"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!loading && !errorMessage && dayData && (
           <>
-            <div className={`p-14 text-center ${dayData.isSnakeSafe ? 'bg-emerald-500' : 'bg-rose-500'} text-white transition-colors duration-700`}>
-              <h1 className="text-5xl font-black tracking-tighter uppercase">{dayData.status}</h1>
-              <p className="text-[10px] font-bold tracking-[0.3em] opacity-70 mt-2 uppercase">Official Director Status</p>
+            <div
+              className={`p-12 text-center ${
+                dayData.isSnakeSafe ? "bg-emerald-500" : "bg-rose-500"
+              } text-white`}
+            >
+              <h1 className="text-5xl font-black tracking-tighter uppercase">
+                {dayData.status}
+              </h1>
+              <p className="text-[10px] font-bold tracking-[0.2em] opacity-70 mt-2 uppercase">
+                Verified Lunar Data
+              </p>
             </div>
 
             <div className="p-10 space-y-12">
               <section>
-                <h3 className="text-slate-300 text-[9px] font-black uppercase tracking-[0.3em] mb-5">Auspicious Activities</h3>
-                <div className="grid grid-cols-1 gap-2">
-                  {dayData.suit.map(item => (
-                    <div key={item} className="bg-slate-50 text-slate-700 px-4 py-3 rounded-2xl text-[12px] font-bold border border-slate-100 flex items-center gap-3 uppercase tracking-tight">
-                      <span className={`w-1.5 h-1.5 rounded-full ${dayData.isSnakeSafe ? 'bg-emerald-400' : 'bg-slate-300'}`}></span>
+                <h3 className="text-slate-300 text-[9px] font-black uppercase tracking-[0.3em] mb-4">
+                  Auspicious Activities
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {dayData.suit?.map((item) => (
+                    <div
+                      key={item}
+                      className="bg-slate-50 text-slate-700 px-3 py-2.5 rounded-xl text-[11px] font-bold border border-slate-100 flex items-center gap-2 uppercase tracking-tighter"
+                    >
+                      <span
+                        className={`w-1 h-1 rounded-full ${
+                          dayData.isSnakeSafe ? "bg-emerald-400" : "bg-slate-300"
+                        }`}
+                      ></span>
                       {item}
                     </div>
                   ))}
@@ -85,11 +161,16 @@ export default function CalendarApp() {
               </section>
 
               <section>
-                <h3 className="text-slate-300 text-[9px] font-black uppercase tracking-[0.3em] mb-5">Avoid Today</h3>
-                <div className="grid grid-cols-1 gap-2 opacity-40">
-                  {dayData.avoid.map(item => (
-                    <div key={item} className="bg-slate-50 text-slate-400 px-4 py-3 rounded-2xl text-[11px] font-bold border border-slate-100 uppercase tracking-tight">
-                       {item}
+                <h3 className="text-slate-300 text-[9px] font-black uppercase tracking-[0.3em] mb-4">
+                  Avoid
+                </h3>
+                <div className="grid grid-cols-2 gap-2 opacity-40">
+                  {dayData.avoid?.map((item) => (
+                    <div
+                      key={item}
+                      className="bg-slate-50 text-slate-400 px-3 py-2 rounded-xl text-[10px] font-bold border border-slate-100 uppercase tracking-tighter"
+                    >
+                      {item}
                     </div>
                   ))}
                 </div>
@@ -98,8 +179,6 @@ export default function CalendarApp() {
           </>
         )}
       </div>
-      
-      <p className="mt-12 text-[8px] text-slate-200 uppercase font-black tracking-[0.8em]">Lunar Director v1.9 • Pure Data Mode</p>
     </div>
   );
 }
