@@ -51,7 +51,7 @@ export async function GET(request) {
 
   const padMonth = String(month).padStart(2, "0");
   const padDay = String(day).padStart(2, "0");
-  const targetUrl = `https://www.yourchineseastrology.com/tong-shu/${year}-${padMonth}-${padDay}.htm`;
+  const url = `https://www.yourchineseastrology.com/calendar/${year}/${Number(month)}-${Number(day)}.htm`;
 
   try {
     const response = await fetch(targetUrl, {
