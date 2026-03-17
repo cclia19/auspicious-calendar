@@ -104,7 +104,7 @@ export async function GET(request) {
         suit = extractItemsFromCell($, nextCell);
       }
 
-      if (label === "avoid" || label.includes("avoid")) {
+      if ((label === 'inauspicious') || label.includes("avoid")) {
         avoid = extractItemsFromCell($, nextCell);
       }
 
