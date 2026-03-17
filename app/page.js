@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 function cleanItems(items = []) {
   const cleaned = items
@@ -36,6 +36,8 @@ export default function CalendarApp() {
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
+  const dayRefs = useRef({});
+
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -49,6 +51,17 @@ export default function CalendarApp() {
       year: current.getFullYear(),
     };
   }, [selectedDay, month, year]);
+
+  const monthDays = useMemo(() => {
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const day = i + 1;
+      const date = new Date(year, month - 1, day);
+      return {
+        day,
+        weekdayShort: date.toLocaleString("en-US", { weekday: "short" }),
+      };
+    });
+  }, [daysInMonth, month, year]);
 
   useEffect(() => {
     let isMounted = true;
@@ -90,6 +103,17 @@ export default function CalendarApp() {
       isMounted = false;
     };
   }, [selectedDay, month, year]);
+
+  useEffect(() => {
+    const el = dayRefs.current[selectedDay];
+    if (el) {
+      el.scrollIntoView({
+        behavior: "smooth",
+        inline: "center",
+        block: "nearest",
+      });
+    }
+  }, [selectedDay]);
 
   const auspiciousItems = cleanItems(dayData?.suit || []);
   const inauspiciousItems = cleanItems(dayData?.avoid || []);
@@ -144,6 +168,45 @@ export default function CalendarApp() {
           >
             →
           </button>
+        </div>
+
+        {/* Simple Date Strip */}
+        <div
+          className={`mb-4 overflow-hidden rounded-[1.5rem] shadow-sm ${
+            isClashDay ? "bg-white/95 backdrop-blur" : "bg-white"
+          }`}
+        >
+          <div className="flex gap-2 overflow-x-auto px-3 py-3 scrollbar-none">
+            {monthDays.map((item) => {
+              const active = item.day === selectedDay;
+
+              return (
+                <button
+                  key={item.day}
+                  ref={(el) => {
+                    dayRefs.current[item.day] = el;
+                  }}
+                  onClick={() => setSelectedDay(item.day)}
+                  className={`min-w-[58px] shrink-0 rounded-2xl px-3 py-2 text-center transition ${
+                    active
+                      ? isClashDay
+                        ? "bg-rose-600 text-white shadow-sm"
+                        : "bg-slate-900 text-white shadow-sm"
+                      : "bg-slate-50 text-slate-600"
+                  }`}
+                >
+                  <div
+                    className={`text-[10px] font-black uppercase tracking-widest ${
+                      active ? "opacity-80" : "text-slate-400"
+                    }`}
+                  >
+                    {item.weekdayShort}
+                  </div>
+                  <div className="mt-1 text-base font-black">{item.day}</div>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Loading */}
