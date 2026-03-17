@@ -35,6 +35,7 @@ export default function CalendarApp() {
   const [selectedDay, setSelectedDay] = useState(now.getDate());
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [fetching, setFetching] = useState(false);
 
   const dayRefs = useRef({});
 
@@ -67,13 +68,17 @@ export default function CalendarApp() {
     let isMounted = true;
 
     async function loadData() {
-      setLoading(true);
       setErrorMessage("");
+
+      if (dayData) {
+        setFetching(true);
+      } else {
+        setLoading(true);
+      }
 
       try {
         const res = await fetch(
-          `/api/calendar?day=${selectedDay}&month=${month}&year=${year}`,
-          { cache: "no-store" }
+          `/api/calendar?day=${selectedDay}&month=${month}&year=${year}`
         );
 
         const data = await res.json();
@@ -87,12 +92,12 @@ export default function CalendarApp() {
         }
       } catch (err) {
         if (isMounted) {
-          setDayData(null);
           setErrorMessage(err.message || "Failed to fetch data");
         }
       } finally {
         if (isMounted) {
           setLoading(false);
+          setFetching(false);
         }
       }
     }
@@ -176,7 +181,7 @@ export default function CalendarApp() {
             isClashDay ? "bg-white/95 backdrop-blur" : "bg-white"
           }`}
         >
-          <div className="flex gap-2 overflow-x-auto px-3 py-3 scrollbar-none">
+          <div className="flex gap-2 overflow-x-auto px-3 py-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             {monthDays.map((item) => {
               const active = item.day === selectedDay;
 
@@ -209,8 +214,8 @@ export default function CalendarApp() {
           </div>
         </div>
 
-        {/* Loading */}
-        {loading && (
+        {/* Initial Loading */}
+        {loading && !dayData && (
           <div className="rounded-[2rem] bg-white p-10 text-center shadow-sm">
             <div className="text-sm font-bold tracking-widest text-slate-400">
               Loading...
@@ -219,7 +224,7 @@ export default function CalendarApp() {
         )}
 
         {/* Error */}
-        {!loading && errorMessage && (
+        {!loading && errorMessage && !dayData && (
           <div className="rounded-[2rem] bg-white p-10 text-center shadow-sm">
             <h1 className="mb-3 text-xl font-black uppercase tracking-widest text-rose-500">
               Sync Failed
@@ -235,21 +240,27 @@ export default function CalendarApp() {
         )}
 
         {/* Main */}
-        {!loading && !errorMessage && dayData && (
+        {dayData && (
           <div className="space-y-4">
-            {/* Date / Status card first */}
+            {/* Date / Status */}
             <section
               className={`overflow-hidden rounded-[2rem] shadow-sm ${
                 isClashDay ? "bg-white/95 backdrop-blur" : "bg-white"
               }`}
             >
               <div
-                className={`px-6 py-6 text-center ${
+                className={`relative px-6 py-6 text-center ${
                   isClashDay
                     ? "bg-gradient-to-r from-rose-600 to-rose-500 text-white"
                     : "bg-gradient-to-r from-slate-900 to-slate-800 text-white"
                 }`}
               >
+                {fetching && (
+                  <div className="absolute right-4 top-4 rounded-full bg-white/20 px-3 py-1 text-[10px] font-black uppercase tracking-widest">
+                    Updating
+                  </div>
+                )}
+
                 <div className="text-xs font-black uppercase tracking-[0.35em] opacity-70">
                   {displayDate.monthShort} {displayDate.year}
                 </div>
@@ -261,7 +272,7 @@ export default function CalendarApp() {
                 </div>
               </div>
 
-              <div className="grid gap-3 p-4 md:grid-cols-3">
+              <div className="grid gap-3 p-4 md:grid-cols-2">
                 <div className="rounded-[1.25rem] bg-slate-50 px-4 py-4 text-center">
                   <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
                     Status
@@ -283,21 +294,11 @@ export default function CalendarApp() {
                     {dayData.clash || "None"}
                   </div>
                 </div>
-
-                <div className="rounded-[1.25rem] bg-slate-50 px-4 py-4 text-center">
-                  <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                    Lunar Data
-                  </div>
-                  <div className="mt-2 text-sm font-bold text-slate-800">
-                    Verified
-                  </div>
-                </div>
               </div>
             </section>
 
-            {/* Compact two boxes */}
+            {/* Two boxes */}
             <div className="grid gap-4 md:grid-cols-2">
-              {/* Auspicious */}
               <section
                 className={`rounded-[2rem] p-4 shadow-sm ${
                   isClashDay ? "bg-white/95 backdrop-blur" : "bg-white"
@@ -333,7 +334,6 @@ export default function CalendarApp() {
                 </div>
               </section>
 
-              {/* Inauspicious */}
               <section
                 className={`rounded-[2rem] p-4 shadow-sm ${
                   isClashDay ? "bg-white/95 backdrop-blur" : "bg-white"
