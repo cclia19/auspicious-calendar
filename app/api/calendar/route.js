@@ -3,8 +3,6 @@ import * as cheerio from 'cheerio';
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  
-  // 1. Get current system date as defaults
   const now = new Date();
   const year = searchParams.get('year') || now.getFullYear();
   const month = searchParams.get('month') || (now.getMonth() + 1);
@@ -14,43 +12,52 @@ export async function GET(request) {
   const padDay = String(day).padStart(2, '0');
   
   try {
-    // 2. Dynamic URL generation based on system date
     const url = `https://www.yourchineseastrology.com/tong-shu/${year}-${padMonth}-${padDay}.htm`;
     const response = await fetch(url, { next: { revalidate: 3600 } });
-    
-    if (!response.ok) throw new Error("Source unreachable");
-
     const html = await response.text();
     const $ = cheerio.load(html);
 
     let suit = [];
     let avoid = [];
     
-    // 3. Strict Scraping: Target the exact table cells for Suit and Avoid
-    $('th:contains("Suit"), td:contains("Suit")').next('td').find('a, span').each((i, el) => {
-      const text = $(el).text().trim();
-      if (text) suit.push(text);
+    // SMART SEARCH: Find the cell containing "Suit", then grab all text in the cell next to it
+    $('th, td').each((i, el) => {
+      const cellText = $(el).text().trim();
+      
+      if (cellText === "Suit") {
+        $(el).next('td').find('a, span, li').each((j, item) => {
+          const val = $(item).text().trim();
+          if (val.length > 2) suit.push(val);
+        });
+        // Fallback if no sub-tags (a, span, li) are found
+        if (suit.length === 0) {
+          suit = $(el).next('td').text().split(',').map(s => s.trim());
+        }
+      }
+
+      if (cellText === "Avoid") {
+        $(el).next('td').find('a, span, li').each((j, item) => {
+          const val = $(item).text().trim();
+          if (val.length > 2) avoid.push(val);
+        });
+        if (avoid.length === 0) {
+          avoid = $(el).next('td').text().split(',').map(s => s.trim());
+        }
+      }
     });
 
-    $('th:contains("Avoid"), td:contains("Avoid")').next('td').find('a, span').each((i, el) => {
-      const text = $(el).text().trim();
-      if (text) avoid.push(text);
-    });
+    // Clean up
+    const finalSuit = [...new Set(suit)].filter(item => item.length > 2 && item !== "Suit");
+    const finalAvoid = [...new Set(avoid)].filter(item => item.length > 2 && item !== "Avoid");
 
-    // 4. Clean and Deduplicate
-    const finalSuit = [...new Set(suit)].filter(item => item.length > 1);
-    const finalAvoid = [...new Set(avoid)].filter(item => item.length > 1);
+    // STRICT CHECK: If after all that it's still empty, then it's a real error
+    if (finalSuit.length === 0) throw new Error("No Data Found");
 
-    // 5. Validation: Fail if data is missing (No hardcoding)
-    if (finalSuit.length === 0 || finalAvoid.length === 0) {
-      return NextResponse.json({ error: "Sync Failed: Missing Source Data" }, { status: 500 });
-    }
-
-    const clashSection = $('th:contains("Clash"), td:contains("Clash")').next('td').text();
-    const isSnakeClash = clashSection.toLowerCase().includes("snake");
+    // CLASH LOGIC
+    const clashText = $('th:contains("Clash"), td:contains("Clash")').next('td').text();
+    const isSnakeClash = clashText.toLowerCase().includes("snake");
 
     return NextResponse.json({
-      fullDate: `${year}-${padMonth}-${padDay}`,
       isSnakeSafe: !isSnakeClash,
       status: isSnakeClash ? "Snake Clash" : "Auspicious",
       suit: finalSuit,
@@ -58,6 +65,7 @@ export async function GET(request) {
     });
 
   } catch (error) {
-    return NextResponse.json({ error: "Sync Failed: Connection Error" }, { status: 500 });
+    console.error("Scrape Error:", error);
+    return NextResponse.json({ error: "Sync Failed" }, { status: 500 });
   }
 }
