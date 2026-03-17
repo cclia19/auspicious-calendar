@@ -20,40 +20,31 @@ export async function GET(request) {
     let suit = [];
     let avoid = [];
     
-    // SMART SEARCH: Find the cell containing "Suit", then grab all text in the cell next to it
+    // RESILIENT SCRAPER: Iterate through every table cell to find matches
     $('th, td').each((i, el) => {
-      const cellText = $(el).text().trim();
-      
-      if (cellText === "Suit") {
-        $(el).next('td').find('a, span, li').each((j, item) => {
-          const val = $(item).text().trim();
-          if (val.length > 2) suit.push(val);
-        });
-        // Fallback if no sub-tags (a, span, li) are found
-        if (suit.length === 0) {
-          suit = $(el).next('td').text().split(',').map(s => s.trim());
-        }
+      const label = $(el).text().trim().toLowerCase();
+      const nextCell = $(el).next('td');
+
+      if (label === 'suit') {
+        // Try grabbing links/spans first, fallback to raw text split by commas
+        nextCell.find('a, span').each((j, item) => suit.push($(item).text().trim()));
+        if (suit.length === 0) suit = nextCell.text().split(',').map(s => s.trim());
       }
 
-      if (cellText === "Avoid") {
-        $(el).next('td').find('a, span, li').each((j, item) => {
-          const val = $(item).text().trim();
-          if (val.length > 2) avoid.push(val);
-        });
-        if (avoid.length === 0) {
-          avoid = $(el).next('td').text().split(',').map(s => s.trim());
-        }
+      if (label === 'avoid') {
+        nextCell.find('a, span').each((j, item) => avoid.push($(item).text().trim()));
+        if (avoid.length === 0) avoid = nextCell.text().split(',').map(s => s.trim());
       }
     });
 
-    // Clean up
-    const finalSuit = [...new Set(suit)].filter(item => item.length > 2 && item !== "Suit");
-    const finalAvoid = [...new Set(avoid)].filter(item => item.length > 2 && item !== "Avoid");
+    // Clean data: Remove empty strings, duplicates, and labels
+    const clean = (arr) => [...new Set(arr)].filter(v => v.length > 2 && !/suit|avoid/i.test(v));
+    const finalSuit = clean(suit);
+    const finalAvoid = clean(avoid);
 
-    // STRICT CHECK: If after all that it's still empty, then it's a real error
-    if (finalSuit.length === 0) throw new Error("No Data Found");
+    // CRITICAL VALIDATION: Only fail if we truly found nothing
+    if (finalSuit.length === 0) throw new Error("Scrape failed");
 
-    // CLASH LOGIC
     const clashText = $('th:contains("Clash"), td:contains("Clash")').next('td').text();
     const isSnakeClash = clashText.toLowerCase().includes("snake");
 
@@ -65,7 +56,6 @@ export async function GET(request) {
     });
 
   } catch (error) {
-    console.error("Scrape Error:", error);
-    return NextResponse.json({ error: "Sync Failed" }, { status: 500 });
+    return NextResponse.json({ error: "Sync Error" }, { status: 500 });
   }
 }
